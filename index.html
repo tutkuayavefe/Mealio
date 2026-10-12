@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f3f1e9" />
+    <meta name="description" content="Evdeki malzemelere göre kendi yemek arşivinizde arama yapın." />
+    <title>Mealio — Evde ne pişirsek?</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./src/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="Mealio ana sayfa"><span class="brand-mark" aria-hidden="true">m</span><span>mealio</span></a>
+      <div class="topbar-note"><span class="live-dot"></span> Kendi mutfak arşivin</div>
+      <button class="button button-dark top-add" type="button" data-action="new-meal"><span aria-hidden="true">＋</span> Yemek ekle</button>
+    </header>
+
+    <main id="top" class="page-shell">
+      <section class="intro" aria-labelledby="page-title">
+        <div class="intro-copy">
+          <p class="eyebrow"><span class="eyebrow-line"></span> Bugün mutfakta</p>
+          <h1 id="page-title">Evde ne<br /><em>pişirsek?</em></h1>
+          <p class="intro-text">Elindeki malzemeleri seç, kendi tariflerin arasından sana uyanı bul.</p>
+        </div>
+        <div class="intro-art" aria-hidden="true">
+          <div class="art-ring ring-one"></div><div class="art-ring ring-two"></div>
+          <div class="art-leaf leaf-one">✳</div><div class="art-leaf leaf-two">✳</div>
+          <div class="art-center"><span>iyi yemek</span><b>evde başlar</b></div>
+          <span class="art-spark spark-one">✦</span><span class="art-spark spark-two">·</span>
+        </div>
+      </section>
+
+      <section class="workspace" aria-label="Yemek arama ve arşiv">
+        <aside class="search-panel">
+          <div class="panel-title-row"><h2>Ne var elinde?</h2><span class="step-icon" aria-hidden="true">⌕</span></div>
+          <p class="panel-hint">Malzemeleri seçerek kendi yemeklerinde ara.</p>
+          <label class="search-label" for="meal-search">Yemek veya malzeme ara</label>
+          <div class="search-box"><span aria-hidden="true">⌕</span><input id="meal-search" type="search" placeholder="Örn. tavuk, makarna..." autocomplete="off" /><button class="clear-search" type="button" aria-label="Aramayı temizle" hidden>×</button></div>
+          <div class="filter-heading"><span>Malzemeler</span><span class="filter-count" data-selected-count>0 seçili</span></div>
+          <div class="ingredient-list" data-ingredient-list aria-label="Malzeme filtreleri"></div>
+          <button class="text-button clear-filters" type="button" data-action="clear-filters" hidden>Seçimleri temizle</button>
+          <div class="pantry-note"><span class="pantry-icon" aria-hidden="true">✳</span><span>Listede yok mu?<br /><button class="text-button" type="button" data-action="new-ingredient">Yeni malzeme ekle</button></span></div>
+        </aside>
+
+        <section class="results-panel" aria-labelledby="results-title">
+          <div class="results-heading">
+            <div><p class="eyebrow results-eyebrow">Senin tarif defterin</p><h2 id="results-title">Yemeklerin</h2></div>
+            <div class="result-meta"><span data-result-count>0 yemek</span><button class="button button-outline add-inline" type="button" data-action="new-meal"><span aria-hidden="true">＋</span> Yeni yemek</button></div>
+          </div>
+          <div class="active-filters" data-active-filters aria-live="polite"></div>
+          <div class="meal-grid" data-meal-grid aria-live="polite"></div>
+          <div class="loading-state" data-loading hidden><span class="loader"></span><p>Tarif defterin açılıyor…</p></div>
+        </section>
+      </section>
+      <footer class="footer"><span>Mealio</span><span>Güzel şeyler, evde pişer.</span></footer>
+    </main>
+
+    <dialog class="meal-dialog" data-meal-dialog aria-labelledby="dialog-title">
+      <div class="dialog-head"><div><p class="eyebrow dialog-eyebrow" data-dialog-eyebrow>Tarif defterine ekle</p><h2 id="dialog-title">Yeni yemek</h2></div><button class="icon-button" type="button" data-action="close-dialog" aria-label="Pencereyi kapat">×</button></div>
+      <form data-meal-form>
+        <input type="hidden" name="id" />
+        <label class="field-label" for="meal-name">Yemeğin adı <span aria-hidden="true">*</span></label>
+        <input class="field-input" id="meal-name" name="name" required maxlength="100" placeholder="Örn. Tavuklu bulgur pilavı" />
+        <div class="field-label ingredient-field-label">Malzemeler <span aria-hidden="true">*</span></div>
+        <div class="form-ingredients" data-form-ingredients></div>
+        <div class="inline-ingredient"><label class="visually-hidden" for="new-ingredient-name">Yeni malzeme</label><input class="field-input" id="new-ingredient-name" placeholder="Listede yoksa ekle" maxlength="60" /><button class="button button-outline" type="button" data-action="add-inline-ingredient">Ekle</button></div>
+        <label class="field-label" for="meal-instructions">Nasıl yapılır? <span class="optional">İsteğe bağlı</span></label>
+        <textarea class="field-input field-textarea" id="meal-instructions" name="instructions" rows="4" placeholder="Kısaca pişirme notlarını yaz…"></textarea>
+        <div class="field-label photo-label">Yemek fotoğrafı <span class="optional">İsteğe bağlı</span></div>
+        <label class="photo-picker" for="meal-photo"><span class="photo-plus" aria-hidden="true">＋</span><span data-photo-label>Bir fotoğraf seç</span><span class="photo-preview" data-photo-preview></span><input id="meal-photo" name="photo" type="file" accept="image/*" /></label>
+        <p class="form-error" data-form-error role="alert" hidden></p>
+        <div class="dialog-actions"><button class="button button-quiet" type="button" data-action="close-dialog">Vazgeç</button><button class="button button-dark" type="submit" data-save-button>Yemeği kaydet</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="detail-dialog" data-detail-dialog aria-labelledby="detail-title"><button class="icon-button detail-close" type="button" data-action="close-detail" aria-label="Detayı kapat">×</button><div data-detail-content></div></dialog>
+    <div class="toast" data-toast role="status" aria-live="polite"></div>
+  </body>
+</html>
