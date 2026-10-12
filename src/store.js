@@ -1,5 +1,5 @@
 const DATABASE_NAME = "mealio";
-const DATABASE_VERSION = 3;
+const DATABASE_VERSION = 4;
 
 let databasePromise;
 
@@ -30,12 +30,13 @@ function transactionDone(transaction) {
   });
 }
 
-function seedLibrary(ingredientStore, mealStore) {
+function seedLibrary(ingredientStore, mealStore, existingIngredients = []) {
   // Persist only meal examples explicitly provided in the product request.
   const ingredientNames = ["Tavuk göğsü", "Makarna", "Spätzle", "Bulgur", "Nohut", "Pirinç"];
-  const byName = new Map();
+  const byName = new Map(existingIngredients.map((ingredient) => [ingredient.normalizedName, ingredient.id]));
   for (const name of ingredientNames) {
     const normalized = normalizeName(name);
+    if (byName.has(normalized.normalizedName)) continue;
     const id = makeId();
     ingredientStore.add({ id, ...normalized, createdAt: new Date().toISOString() });
     byName.set(normalized.normalizedName, id);
@@ -76,13 +77,18 @@ function openDatabase() {
       const meta = db.objectStoreNames.contains("meta")
         ? upgrade.objectStore("meta")
         : db.createObjectStore("meta", { keyPath: "id" });
-      if (event.oldVersion < 3) {
+      const marker = meta.get("starter-meals-v1");
+      marker.onsuccess = () => {
+        if (marker.result) return;
         const mealCount = meals.count();
         mealCount.onsuccess = () => {
-          if (mealCount.result === 0) seedLibrary(ingredients, meals);
+          if (mealCount.result === 0) {
+            const existing = ingredients.getAll();
+            existing.onsuccess = () => seedLibrary(ingredients, meals, existing.result);
+          }
           meta.put({ id: "starter-meals-v1", appliedAt: new Date().toISOString() });
         };
-      }
+      };
     };
     request.onsuccess = () => {
       const db = request.result;

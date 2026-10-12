@@ -12,6 +12,7 @@ Bu depo, farklı yazılım projelerine uyarlanabilen bir VS Code agent takımı 
 | `backend-engineer` | Mevcut yığınla sunucu, API, veri modeli ve entegrasyonları geliştirir | Backend kodu ve kendi değişikliklerine dair doğrulama |
 | `qa-engineer` | Kabul ölçütleri için test ekler/günceller ve ilgili kontrolleri çalıştırır | Test değişiklikleri, komutlar ve sonuçlar |
 | `quality-reviewer` | Uygulama ve test diff'ini bağımsız inceler; kod düzenlemez | Dosya/satır referanslı bulgular veya bulgu yok raporu |
+| `security-guardian` | Kullanıcı verisi, hesapları, gizliliği veya dış sistemleri etkileyen önemli eylemleri salt okunur değerlendirir | Risk sınıfı, etki ve güvenli seçenek; kullanıcı adına izin veremez |
 
 ## Önerilen akış
 
@@ -20,6 +21,7 @@ Bu depo, farklı yazılım projelerine uyarlanabilen bir VS Code agent takımı 
 3. Değişikliğe göre frontend, backend veya ikisi görevlendirilir. Aynı dosyayı birden fazla agent eş zamanlı düzenlemez.
 4. Kod değişikliklerinden sonra `qa-engineer` uygun testleri ekler veya günceller ve proje test komutlarını çalıştırır.
 5. `quality-reviewer` diff'i bağımsız inceler. Bulgular ilgili geliştiriciye döner; takım lideri düzeltmeleri birleştirip son durumu raporlar.
+6. Push, deploy, silme, erişim/izin değişikliği, mesaj gönderme, yayınlama veya benzeri önemli bir eylemden önce `security-guardian` risk incelemesi yapar. İnceleme kullanıcı onayı değildir; takım lideri aynı eylem ve hedef için kullanıcıdan açık onay almadan ilerlemez.
 
 Her işte bütün roller kullanılmaz. Örneğin salt belge değişikliğinde frontend/backend agent'ı gerekmeyebilir. İstek çok açık ve dar kapsamlıysa planner atlanabilir; test edilebilir kod değişikliği varsa QA ve review adımları akışta tutulur.
 
@@ -30,6 +32,8 @@ QA davranışı kabul ölçütlerine göre doğrular: test yazar/günceller, kom
 ## VS Code kullanımı
 
 Agent tanımları `.github/agents/*.agent.md` biçimindedir. Proje klasörünü VS Code'da açıp Agent menüsünden `team-lead` seçin. Ardından özelliği veya düzeltmeyi normal sohbet mesajı olarak verin. Takım liderinin alt-agent çağırabilmesi seçili model/harness ve `agent` aracının kullanılabilir olmasına bağlıdır. Destek yoksa `AGENTS.md` aynı rolleri uygun olduğunda sıralı yürütmesini ve sınırlamayı raporlamasını ister. Agent tanımları arka planda sürekli çalışan servisler değildir.
+
+`.github/hooks/security-approval.json` ve `security_gate.py`, VS Code Local agent harness'ında seçili riskli araç çağrıları için onay ister. Hook desteği ve kapsamı kullanılan agent harness'ına göre değişir; bu tek başına her ortamda mutlak bir güvenlik sınırı değildir. Workspace güvenilir olmalı ve VS Code'da `chat.useHooks` etkin olmalıdır. Güvenlik ajanı yalnızca inceleme yapar; kullanıcı onayı yerine geçmez.
 
 Agent rollerini doğrudan menüden de seçebilirsiniz. Fakat feature işlerinde koordinasyonu ve QA/review akışını tek yerde tutmak için `team-lead` kullanılması önerilir.
 

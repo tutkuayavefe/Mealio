@@ -12,6 +12,7 @@
 - Use `product-planner` to clarify scope and acceptance criteria when needed. Assign implementation to the relevant frontend/backend specialist; avoid invoking roles that do not apply.
 - After implementation, have `qa-engineer` create or update relevant tests and run the appropriate checks supported by the project. Report the exact commands and results; do not claim checks that were not run.
 - Have `quality-reviewer` independently inspect the resulting diff and QA findings before finishing. The reviewer reports findings without editing code.
+- Before consequential actions affecting the user's data, accounts, money, privacy, access, reputation, or external services, ask `security-guardian` for a read-only review. The guardian cannot authorize actions; obtain the user's explicit approval for the exact action and target. Never bypass approval prompts.
 - Avoid having multiple agents edit the same files at once. The team lead owns integration and the final report.
 - If the selected agent harness cannot invoke custom agents or subagents, perform the workflow sequentially where useful and say that delegation was unavailable.
 - Read a matching skill in `.github/skills/` when its workflow applies; do not load unrelated skills.

@@ -69,6 +69,7 @@
         <textarea class="field-input field-textarea" id="meal-instructions" name="instructions" rows="4" placeholder="Kısaca pişirme notlarını yaz…"></textarea>
         <div class="field-label photo-label">Yemek fotoğrafı <span class="optional">İsteğe bağlı</span></div>
         <label class="photo-picker" for="meal-photo"><span class="photo-plus" aria-hidden="true">＋</span><span data-photo-label>Bir fotoğraf seç</span><span class="photo-preview" data-photo-preview></span><input id="meal-photo" name="photo" type="file" accept="image/*" /></label>
+        <button class="text-button photo-remove" type="button" data-action="remove-photo" hidden>Mevcut fotoğrafı kaldır</button>
         <p class="form-error" data-form-error role="alert" hidden></p>
         <div class="dialog-actions"><button class="button button-quiet" type="button" data-action="close-dialog">Vazgeç</button><button class="button button-dark" type="submit" data-save-button>Yemeği kaydet</button></div>
       </form>

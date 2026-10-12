@@ -7,12 +7,14 @@ const els = {
   clearSearch: $('.clear-search'), clearFilters: $('.clear-filters'), form: $('[data-meal-form]'), mealDialog: $('[data-meal-dialog]'),
   detailDialog: $('[data-detail-dialog]'), detailContent: $('[data-detail-content]'), formIngredients: $('[data-form-ingredients]'),
   formError: $('[data-form-error]'), photo: $('#meal-photo'), photoLabel: $('[data-photo-label]'), photoPreview: $('[data-photo-preview]'),
+  photoRemove: $('[data-action="remove-photo"]'),
   loading: $('[data-loading]'), toast: $('[data-toast]'),
 };
 let data = { ingredients: [], meals: [] };
 let selected = new Set();
 let toastTimer;
 let previewUrl = null;
+let removeExistingPhoto = false;
 const imageUrls = new WeakMap();
 
 function normalized(value) { return String(value ?? '').trim().toLocaleLowerCase('tr'); }
@@ -94,10 +96,12 @@ function openMealForm(meal = null) {
   $('#dialog-title').textContent = meal ? 'Yemeği düzenle' : 'Yeni yemek';
   $('[data-save-button]').textContent = meal ? 'Değişiklikleri kaydet' : 'Yemeği kaydet';
   if (previewUrl) URL.revokeObjectURL(previewUrl);
+  removeExistingPhoto = false;
   const existingPhoto = meal?.photo instanceof Blob ? meal.photo : null;
   previewUrl = existingPhoto ? URL.createObjectURL(existingPhoto) : null;
   els.photoPreview.innerHTML = previewUrl ? `<img src="${escapeHTML(previewUrl)}" alt="Mevcut yemek fotoğrafı">` : '';
   els.photoLabel.textContent = existingPhoto ? 'Yeni fotoğraf seç' : 'Bir fotoğraf seç';
+  els.photoRemove.hidden = !existingPhoto;
   renderFormIngredients();
   const ingredientIds = new Set(mealIngredientIds(meal ?? {}));
   els.form.querySelectorAll('[name="ingredientIds"]').forEach(input => { input.checked = ingredientIds.has(input.value); });
@@ -144,6 +148,16 @@ document.addEventListener('click', async event => {
       case 'clear-filters': selected.clear(); els.search.value = ''; renderIngredients(); renderMeals(); break;
       case 'close-dialog': els.mealDialog.close(); break;
       case 'close-detail': els.detailDialog.close(); break;
+      case 'remove-photo': {
+        removeExistingPhoto = true;
+        els.photo.value = '';
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
+        els.photoPreview.innerHTML = '';
+        els.photoLabel.textContent = 'Bir fotoğraf seç';
+        els.photoRemove.hidden = true;
+        break;
+      }
       case 'edit-meal': {
         const meal = await getMeal(action.dataset.id) ?? data.meals.find(item => item.id === action.dataset.id);
         els.detailDialog.close(); openMealForm(meal); break;
@@ -179,6 +193,7 @@ els.search.addEventListener('input', renderMeals);
 els.clearSearch.addEventListener('click', () => { els.search.value = ''; renderMeals(); els.search.focus(); });
 els.photo.addEventListener('change', () => {
   const file = els.photo.files?.[0];
+  removeExistingPhoto = false;
   if (previewUrl) URL.revokeObjectURL(previewUrl);
   previewUrl = file ? URL.createObjectURL(file) : null;
   els.photoLabel.textContent = file?.name ?? 'Bir fotoğraf seç';
@@ -192,7 +207,7 @@ els.form.addEventListener('submit', async event => {
   try {
     const id = els.form.elements.id.value || undefined;
     const chosenPhoto = els.photo.files?.[0];
-    await saveMeal({ id, name: els.form.elements.name.value.trim(), instructions: els.form.elements.instructions.value.trim(), ingredientIds, photo: chosenPhoto ?? (id ? undefined : null) });
+    await saveMeal({ id, name: els.form.elements.name.value.trim(), instructions: els.form.elements.instructions.value.trim(), ingredientIds, photo: chosenPhoto ?? (removeExistingPhoto ? null : (id ? undefined : null)) });
     els.mealDialog.close(); await refresh(); toast('Yemek tarif defterine eklendi.');
   } catch (error) {
     els.formError.textContent = error?.message || 'Yemek kaydedilemedi. Lütfen tekrar dene.'; els.formError.hidden = false;

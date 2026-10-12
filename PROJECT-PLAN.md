@@ -15,7 +15,7 @@ Help one household build a reusable meal library and quickly answer “what can 
 
 ## Data model
 
-The browser database is `mealio`, schema version 1:
+The browser database is `mealio`, current schema version 4. Version upgrades create the canonical stores/indexes and add one migration marker. When the starter-data migration finds no meals, it reuses matching ingredients and seeds only the four dishes from the user's brief. The marker prevents those examples from reappearing after a user clears their library.
 
 ### `ingredients` object store
 
@@ -34,7 +34,7 @@ The browser database is `mealio`, schema version 1:
 - `photo`: optional browser `Blob` stored locally
 - `createdAt`, `updatedAt`: ISO timestamps
 
-This keeps ingredient names canonical while allowing one ingredient to belong to many meals. A separate join store or server database can be introduced if future usage needs richer quantities, units, or multi-user sync.
+The `meta` store keeps one-time migration markers keyed by `id`. This keeps ingredient names canonical while allowing one ingredient to belong to many meals. A separate join store or server database can be introduced if future usage needs richer quantities, units, or multi-user sync.
 
 ## Architecture
 
