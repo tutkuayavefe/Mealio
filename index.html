@@ -13,6 +13,7 @@
     <header class="topbar">
       <a class="brand" href="#top" aria-label="Mealio ana sayfa"><span class="brand-mark" aria-hidden="true">m</span><span>mealio</span></a>
       <div class="topbar-note"><span class="live-dot"></span> Kendi mutfak arşivin</div>
+      <button class="button button-outline" type="button" data-action="open-sharing">Paylaşım ayarları</button>
       <button class="button button-dark top-add" type="button" data-action="new-meal"><span aria-hidden="true">＋</span> Yemek ekle</button>
     </header>
 
@@ -76,6 +77,59 @@
     </dialog>
 
     <dialog class="detail-dialog" data-detail-dialog aria-labelledby="detail-title"><button class="icon-button detail-close" type="button" data-action="close-detail" aria-label="Detayı kapat">×</button><div data-detail-content></div></dialog>
+    <dialog class="meal-dialog" data-sharing-dialog aria-labelledby="sharing-title">
+      <div class="dialog-head"><div><p class="eyebrow">Cihazlar arası ortak arşiv</p><h2 id="sharing-title">Paylaşım ayarları</h2></div><button class="icon-button" type="button" data-action="close-sharing" aria-label="Pencereyi kapat">×</button></div>
+      <section class="sharing-content">
+        <p data-cloud-status role="status">Bu cihazdaki tarifler yalnızca bu tarayıcıda kayıtlı.</p>
+        <p class="form-error" data-cloud-error role="alert" hidden></p>
+        <form data-cloud-signin>
+          <label class="field-label" for="cloud-email">E-posta adresin</label>
+          <input class="field-input" id="cloud-email" name="email" type="email" autocomplete="email" required placeholder="ornek@eposta.com" />
+          <p class="panel-hint">Giriş bağlantısını e-postanda aç. Sonra davet kodunu girerek bir haneye katılabilir veya yeni hane oluşturabilirsin.</p>
+          <button class="button button-dark" type="submit" data-signin-button>E-posta giriş bağlantısı gönder</button>
+        </form>
+        <form data-create-household hidden>
+          <label class="field-label" for="household-name">Hane adı</label>
+          <input class="field-input" id="household-name" name="name" required maxlength="100" value="Mealio" />
+          <button class="button button-dark" type="submit">Ortak haneyi oluştur</button>
+        </form>
+        <form data-join-household hidden>
+          <label class="field-label" for="household-invite-code">Davet kodu</label>
+          <input class="field-input" id="household-invite-code" name="code" required maxlength="67" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Paylaşılan kodu gir" />
+          <p class="panel-hint">Kodu kabul edince bu hanenin kayıtlı yemekleri ortak listen olur.</p>
+          <button class="button button-dark" type="submit" data-join-button>Koda katıl</button>
+        </form>
+        <div data-household-actions hidden>
+          <section class="household-invites" aria-labelledby="household-name-heading">
+            <h3 id="household-name-heading" data-household-name></h3>
+            <p class="panel-hint">Bu hanenin yemek listesi üyeler arasında paylaşılır.</p>
+            <form data-create-invite>
+              <label class="field-label" for="invite-label">Davet koduna bir isim ver</label>
+              <input class="field-input" id="invite-label" name="label" required maxlength="80" placeholder="Örn. Ezgi'nin telefonu" />
+              <button class="button button-outline" type="submit" data-create-invite-button>Davet kodu oluştur</button>
+            </form>
+            <section data-invite-result hidden aria-live="polite" aria-labelledby="invite-result-title">
+              <h4 id="invite-result-title">Davet kodun hazır</h4>
+              <p data-invite-result-label></p>
+              <div class="inline-ingredient"><output class="field-input" data-invite-code></output><button class="button button-outline" type="button" data-action="copy-invite-code">Kopyala</button></div>
+              <p class="panel-hint">Bu kodu güvenilir kişiyle paylaş. Kodu alan kişi kendi hesabıyla giriş yapıp buraya girerek haneye katılabilir. Kodu bu pencereden kapatınca tekrar gösteremeyebilirsin.</p>
+            </section>
+          </section>
+          <button class="button button-outline" type="button" data-action="migrate-local">Bu cihazdaki tarifleri ortak arşive aktar</button>
+          <button class="button button-quiet" type="button" data-action="export-local">Bu cihazdaki veriyi yedekle (JSON)</button>
+          <button class="text-button" type="button" data-action="sign-out">Ortak hesaptan çıkış yap</button>
+        </div>
+        <section class="migration-preview" data-migration-preview hidden aria-labelledby="migration-preview-title">
+          <h3 id="migration-preview-title">Aktarımı gözden geçir</h3>
+          <p data-migration-destination></p>
+          <p data-migration-summary></p>
+          <ul data-migration-meals></ul>
+          <p class="panel-hint" data-migration-preservation>Aktarım yerel yemekleri veya fotoğrafları silmez.</p>
+          <div class="inline-ingredient"><button class="button button-quiet" type="button" data-action="cancel-migration">Vazgeç</button><button class="button button-dark" type="button" data-action="confirm-migration" data-confirm-migration>Listelenen yemekleri aktar</button></div>
+        </section>
+      </section>
+      <div class="dialog-actions"><button class="button button-quiet" type="button" data-action="close-sharing">Kapat</button></div>
+    </dialog>
     <div class="toast" data-toast role="status" aria-live="polite"></div>
   </body>
 </html>

@@ -1,9 +1,10 @@
 # Project instructions
 
 ## Project context
-- Mealio is a personal, local-first meal and ingredient library. Suggestions must come only from meals saved in this local library; never invent recipes or imply unsaved recipes are stored.
-- The MVP uses dependency-free HTML, CSS, and JavaScript ES modules. The browser serves the app; there is no remote backend or account.
-- Persist structured records and uploaded photos in IndexedDB. Ingredients have reusable stable IDs; meals refer to ingredient IDs. Normalize names for duplicate prevention while preserving user-facing spelling.
+- Mealio is a household meal and ingredient library. Suggestions must come only from meals saved in the library; never invent recipes or imply unsaved recipes are stored.
+- The app uses dependency-free HTML, CSS, and JavaScript ES modules. It defaults to browser IndexedDB; optional Supabase Auth/database/storage integration is implemented but remains config-first and is not connected to a provisioned cloud project yet.
+- Keep local records intact. Any later transfer to shared storage must be explicit, repeatable, and preserve the local source until the user verifies the cloud copy.
+- Persist structured records and uploaded photos. Ingredients have reusable stable IDs; meals refer to ingredient IDs. Normalize names for duplicate prevention while preserving user-facing spelling.
 - Inspect the relevant code before changing it. Follow the current architecture and document deliberate changes here.
 - Keep the app useful on mobile and desktop, support keyboard use, label form controls, and provide clear validation and empty states.
 
