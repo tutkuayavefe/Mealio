@@ -1,6 +1,6 @@
 import * as localStore from './store.js';
 import * as cloudStore from './cloud-store.js';
-import { isCloudConfigured, getSession, requestSignInLink, signOut, createHousehold, inviteHouseholdMember, getHouseholdDetails, authStateChange } from './cloud-client.js';
+import { isCloudConfigured, getSession, requestSignInLink, signOut, createHousehold, createHouseholdInvite, acceptHouseholdInvite, getHouseholdDetails, authStateChange } from './cloud-client.js';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const els = {
@@ -12,6 +12,8 @@ const els = {
   photoRemove: $('[data-action="remove-photo"]'),
   sharingDialog: $('[data-sharing-dialog]'), cloudStatus: $('[data-cloud-status]'), cloudError: $('[data-cloud-error]'),
   cloudSignin: $('[data-cloud-signin]'), createHousehold: $('[data-create-household]'), householdActions: $('[data-household-actions]'),
+  joinHousehold: $('[data-join-household]'), createInvite: $('[data-create-invite]'), inviteResult: $('[data-invite-result]'),
+  inviteCode: $('[data-invite-code]'), inviteLabel: $('[data-invite-result-label]'), householdName: $('[data-household-name]'),
   migrationPreview: $('[data-migration-preview]'), migrationDestination: $('[data-migration-destination]'),
   migrationSummary: $('[data-migration-summary]'), migrationMeals: $('[data-migration-meals]'),
   migrationConfirm: $('[data-confirm-migration]'),
@@ -136,12 +138,14 @@ function updateSharingUI() {
   const configured = isCloudConfigured();
   els.cloudSignin.hidden = !configured || Boolean(cloudUser);
   els.createHousehold.hidden = !configured || !cloudUser || store === cloudStore;
+  els.joinHousehold.hidden = !configured || !cloudUser || store === cloudStore;
   els.householdActions.hidden = !configured || !cloudUser || store !== cloudStore;
+  if (store !== cloudStore) els.householdName.textContent = '';
   if (!configured) els.cloudStatus.textContent = 'Ortak arşiv henüz kurulmadı. Bu cihazdaki tarifler yerel olarak çalışmaya devam ediyor.';
   else if (cloudUnavailable) els.cloudStatus.textContent = 'Ortak arşive erişilemedi; şu an yalnızca bu cihazdaki yerel arşiv gösteriliyor.';
-  else if (!cloudUser) els.cloudStatus.textContent = 'Yerel tariflerin bu tarayıcıda kayıtlı. Yalnızca önceden davet edilmiş kişiler giriş yapabilir.';
+  else if (!cloudUser) els.cloudStatus.textContent = 'Yerel tariflerin bu tarayıcıda kayıtlı. Hane davet kodunu kullanmak için önce e-posta bağlantısıyla giriş yap.';
   else if (store === cloudStore) els.cloudStatus.textContent = `Ortak arşiv etkin: ${cloudUser.email}. Hane üyeleri aynı yemek listesini görür.`;
-  else els.cloudStatus.textContent = `Giriş yapıldı (${cloudUser.email}); önce ortak haneyi oluştur.`;
+  else els.cloudStatus.textContent = `Giriş yapıldı (${cloudUser.email}). Bir davet koduyla haneye katıl veya yeni bir hane oluştur.`;
 }
 async function activateCloud(session) {
   clearInterval(cloudRefreshTimer); cloudRefreshTimer = null;
@@ -151,6 +155,8 @@ async function activateCloud(session) {
   else {
     try {
       await cloudStore.initStore(); store = cloudStore; selected.clear(); await refresh();
+      const household = await getHouseholdDetails();
+      els.householdName.textContent = household?.name ? `${household.name} hanesi` : 'Ortak hane';
       cloudRefreshTimer = setInterval(() => {
         if (document.visibilityState === 'visible' && store === cloudStore) refresh().catch(showCloudError);
       }, 30000);
@@ -161,6 +167,14 @@ async function activateCloud(session) {
     }
   }
   updateSharingUI();
+  return store === cloudStore;
+}
+function clearInviteCode() {
+  els.inviteResult.hidden = true;
+  els.inviteCode.textContent = '';
+  els.inviteLabel.textContent = '';
+  const button = $('[data-create-invite-button]');
+  if (button) { button.disabled = false; button.textContent = 'Davet kodu oluştur'; }
 }
 function fileAsDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -266,15 +280,19 @@ document.addEventListener('click', async event => {
       case 'new-meal': openMealForm(); break;
       case 'open-sharing': clearCloudError(); updateSharingUI(); els.sharingDialog.showModal(); break;
       case 'close-sharing': pendingMigration = null; els.migrationPreview.hidden = true; els.sharingDialog.close(); break;
-      case 'invite-member': {
-        const input = $('#invite-email');
-        if (!input.reportValidity()) break;
-        try { await inviteHouseholdMember(input.value); toast('E-posta daveti gönderildi.'); input.value = ''; }
-        catch (error) { showCloudError(error); }
+      case 'copy-invite-code':
+        try {
+          await navigator.clipboard.writeText(els.inviteCode.textContent);
+          toast('Davet kodu panoya kopyalandı.');
+        } catch {
+          showCloudError(new Error('Kod otomatik kopyalanamadı. Kodu seçip elle kopyalayabilirsin.'));
+          const selection = window.getSelection();
+          const range = document.createRange(); range.selectNodeContents(els.inviteCode);
+          selection?.removeAllRanges(); selection?.addRange(range);
+        }
         break;
-      }
       case 'sign-out':
-        try { await signOut(); cloudUser = null; store = localStore; await refresh(); updateSharingUI(); toast('Ortak hesaptan çıkış yapıldı.'); }
+        try { await signOut(); clearInviteCode(); cloudUser = null; store = localStore; await refresh(); updateSharingUI(); toast('Ortak hesaptan çıkış yapıldı.'); }
         catch (error) { showCloudError(error); }
         break;
       case 'migrate-local':
@@ -367,6 +385,7 @@ els.form.addEventListener('submit', async event => {
 });
 els.mealDialog.addEventListener('click', event => { if (event.target === els.mealDialog) els.mealDialog.close(); });
 els.detailDialog.addEventListener('click', event => { if (event.target === els.detailDialog) els.detailDialog.close(); });
+els.sharingDialog.addEventListener('close', clearInviteCode);
 
 els.loading.hidden = false;
 try {
@@ -382,14 +401,46 @@ try {
     const button = $('[data-signin-button]'); button.disabled = true;
     try {
       await requestSignInLink(els.cloudSignin.elements.email.value);
-      els.cloudStatus.textContent = 'E-postana gelen giriş bağlantısına tıkla. Erişim için önceden davet edilmiş olman gerekir.';
+      els.cloudStatus.textContent = 'Giriş bağlantısı e-postana gönderildi. Bağlantıyı açınca davet koduyla haneye katılabilir veya yeni hane oluşturabilirsin.';
     } catch (error) { showCloudError(error); }
     finally { button.disabled = false; }
   });
   els.createHousehold.addEventListener('submit', async event => {
     event.preventDefault(); clearCloudError();
-    try { await createHousehold(els.createHousehold.elements.name.value); await activateCloud(await getSession()); }
+    const button = els.createHousehold.querySelector('button[type="submit"]'); button.disabled = true;
+    try { await createHousehold(els.createHousehold.elements.name.value.trim()); await activateCloud(await getSession()); }
     catch (error) { showCloudError(error); }
+    finally { button.disabled = false; }
+  });
+  els.createInvite.addEventListener('submit', async event => {
+    event.preventDefault(); clearCloudError(); clearInviteCode();
+    const button = $('[data-create-invite-button]'); button.disabled = true; button.textContent = 'Kod oluşturuluyor…';
+    let created = false;
+    try {
+      const invite = await createHouseholdInvite(els.createInvite.elements.label.value.trim());
+      els.inviteLabel.textContent = invite.label;
+      els.inviteCode.textContent = invite.code;
+      els.inviteResult.hidden = false;
+      els.createInvite.reset();
+      created = true;
+    } catch (error) { showCloudError(error); }
+    finally {
+      button.disabled = created;
+      button.textContent = created ? 'Bu kodu kaydet, sonra yeni kod oluştur' : 'Davet kodu oluştur';
+    }
+  });
+  els.joinHousehold.addEventListener('submit', async event => {
+    event.preventDefault(); clearCloudError();
+    const button = $('[data-join-button]'); button.disabled = true; button.textContent = 'Haneye katılınıyor…';
+    try {
+      const result = await acceptHouseholdInvite(els.joinHousehold.elements.code.value.trim());
+      els.joinHousehold.reset();
+      clearInviteCode();
+      const cloudReady = await activateCloud(await getSession());
+      if (cloudReady) toast(`${result?.household?.name ?? 'Hane'} hanesine katıldın. Yemek listesi yüklendi.`);
+      else toast(`${result?.household?.name ?? 'Hane'} hanesine katıldın. Listeyi yüklemek için sayfayı yenile.`);
+    } catch (error) { showCloudError(error); }
+    finally { button.disabled = false; button.textContent = 'Koda katıl'; }
   });
 }
 catch (error) {

@@ -1,4 +1,12 @@
-import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./cloud-config.js";
+let SUPABASE_URL = "";
+let SUPABASE_PUBLISHABLE_KEY = "";
+try {
+  ({ SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } = await import("./cloud-config.js"));
+} catch {
+  // The Pages branch-root deployment does not generate cloud-config.js.
+  // Keep the local-only app working with the checked-in, empty example config.
+  ({ SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } = await import("./cloud-config.example.js"));
+}
 
 let clientPromise;
 let householdId;
@@ -31,7 +39,7 @@ export async function requestSignInLink(email) {
   const client = await getCloudClient();
   const { error } = await client.auth.signInWithOtp({
     email: email.trim(),
-    options: { shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname },
+    options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname },
   });
   if (error) throw error;
 }
@@ -85,6 +93,35 @@ export async function inviteHouseholdMember(email) {
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
   if (error) throw error;
+}
+
+export async function createHouseholdInvite(label) {
+  const client = await getCloudClient();
+  const { data: { session }, error: sessionError } = await client.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!session) throw new Error("Davet kodu oluşturmak için önce giriş yap.");
+  const { error, data } = await client.functions.invoke("create-household-invite", {
+    body: { household_id: await getHouseholdId(), label: label.trim(), valid_days: 7 },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function acceptHouseholdInvite(code) {
+  const client = await getCloudClient();
+  const { data: { session }, error: sessionError } = await client.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!session) throw new Error("Davet kodunu kullanmak için önce giriş yap.");
+  const { error, data } = await client.functions.invoke("redeem-household-invite", {
+    body: { code: code.trim() },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  if (error) throw error;
+  if (!data?.household_id) throw new Error("Davet kodu haneye bağlanamadı.");
+  householdId = data.household_id;
+  householdUserId = session.user.id;
+  return { household: { id: data.household_id, name: data.household_name } };
 }
 
 export async function currentUserEmail() {

@@ -83,9 +83,9 @@
         <p data-cloud-status role="status">Bu cihazdaki tarifler yalnızca bu tarayıcıda kayıtlı.</p>
         <p class="form-error" data-cloud-error role="alert" hidden></p>
         <form data-cloud-signin>
-          <label class="field-label" for="cloud-email">Davet edilen e-posta adresi</label>
+          <label class="field-label" for="cloud-email">E-posta adresin</label>
           <input class="field-input" id="cloud-email" name="email" type="email" autocomplete="email" required placeholder="ornek@eposta.com" />
-          <p class="panel-hint">Yalnızca hane yöneticisinin önceden davet ettiği kişiler giriş yapabilir.</p>
+          <p class="panel-hint">Giriş bağlantısını e-postanda aç. Sonra davet kodunu girerek bir haneye katılabilir veya yeni hane oluşturabilirsin.</p>
           <button class="button button-dark" type="submit" data-signin-button>E-posta giriş bağlantısı gönder</button>
         </form>
         <form data-create-household hidden>
@@ -93,10 +93,28 @@
           <input class="field-input" id="household-name" name="name" required maxlength="100" value="Mealio" />
           <button class="button button-dark" type="submit">Ortak haneyi oluştur</button>
         </form>
+        <form data-join-household hidden>
+          <label class="field-label" for="household-invite-code">Davet kodu</label>
+          <input class="field-input" id="household-invite-code" name="code" required maxlength="67" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Paylaşılan kodu gir" />
+          <p class="panel-hint">Kodu kabul edince bu hanenin kayıtlı yemekleri ortak listen olur.</p>
+          <button class="button button-dark" type="submit" data-join-button>Koda katıl</button>
+        </form>
         <div data-household-actions hidden>
-          <label class="field-label" for="invite-email">Ezgi'yi e-posta ile davet et</label>
-          <div class="inline-ingredient"><input class="field-input" id="invite-email" type="email" autocomplete="email" required placeholder="ezgi@eposta.com" /><button class="button button-outline" type="button" data-action="invite-member">Davet et</button></div>
-          <p class="panel-hint">Davet, kurulu Supabase Edge Function üzerinden e-postayla gönderilir.</p>
+          <section class="household-invites" aria-labelledby="household-name-heading">
+            <h3 id="household-name-heading" data-household-name></h3>
+            <p class="panel-hint">Bu hanenin yemek listesi üyeler arasında paylaşılır.</p>
+            <form data-create-invite>
+              <label class="field-label" for="invite-label">Davet koduna bir isim ver</label>
+              <input class="field-input" id="invite-label" name="label" required maxlength="80" placeholder="Örn. Ezgi'nin telefonu" />
+              <button class="button button-outline" type="submit" data-create-invite-button>Davet kodu oluştur</button>
+            </form>
+            <section data-invite-result hidden aria-live="polite" aria-labelledby="invite-result-title">
+              <h4 id="invite-result-title">Davet kodun hazır</h4>
+              <p data-invite-result-label></p>
+              <div class="inline-ingredient"><output class="field-input" data-invite-code></output><button class="button button-outline" type="button" data-action="copy-invite-code">Kopyala</button></div>
+              <p class="panel-hint">Bu kodu güvenilir kişiyle paylaş. Kodu alan kişi kendi hesabıyla giriş yapıp buraya girerek haneye katılabilir. Kodu bu pencereden kapatınca tekrar gösteremeyebilirsin.</p>
+            </section>
+          </section>
           <button class="button button-outline" type="button" data-action="migrate-local">Bu cihazdaki tarifleri ortak arşive aktar</button>
           <button class="button button-quiet" type="button" data-action="export-local">Bu cihazdaki veriyi yedekle (JSON)</button>
           <button class="text-button" type="button" data-action="sign-out">Ortak hesaptan çıkış yap</button>
