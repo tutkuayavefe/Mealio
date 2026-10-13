@@ -13,6 +13,7 @@
     <header class="topbar">
       <a class="brand" href="#top" aria-label="Mealio ana sayfa"><span class="brand-mark" aria-hidden="true">m</span><span>mealio</span></a>
       <div class="topbar-note"><span class="live-dot"></span> Kendi mutfak arşivin</div>
+      <button class="button button-outline" type="button" data-action="open-sharing">Paylaşım ayarları</button>
       <button class="button button-dark top-add" type="button" data-action="new-meal"><span aria-hidden="true">＋</span> Yemek ekle</button>
     </header>
 
@@ -76,6 +77,41 @@
     </dialog>
 
     <dialog class="detail-dialog" data-detail-dialog aria-labelledby="detail-title"><button class="icon-button detail-close" type="button" data-action="close-detail" aria-label="Detayı kapat">×</button><div data-detail-content></div></dialog>
+    <dialog class="meal-dialog" data-sharing-dialog aria-labelledby="sharing-title">
+      <div class="dialog-head"><div><p class="eyebrow">Cihazlar arası ortak arşiv</p><h2 id="sharing-title">Paylaşım ayarları</h2></div><button class="icon-button" type="button" data-action="close-sharing" aria-label="Pencereyi kapat">×</button></div>
+      <section class="sharing-content">
+        <p data-cloud-status role="status">Bu cihazdaki tarifler yalnızca bu tarayıcıda kayıtlı.</p>
+        <p class="form-error" data-cloud-error role="alert" hidden></p>
+        <form data-cloud-signin>
+          <label class="field-label" for="cloud-email">Davet edilen e-posta adresi</label>
+          <input class="field-input" id="cloud-email" name="email" type="email" autocomplete="email" required placeholder="ornek@eposta.com" />
+          <p class="panel-hint">Yalnızca hane yöneticisinin önceden davet ettiği kişiler giriş yapabilir.</p>
+          <button class="button button-dark" type="submit" data-signin-button>E-posta giriş bağlantısı gönder</button>
+        </form>
+        <form data-create-household hidden>
+          <label class="field-label" for="household-name">Hane adı</label>
+          <input class="field-input" id="household-name" name="name" required maxlength="100" value="Mealio" />
+          <button class="button button-dark" type="submit">Ortak haneyi oluştur</button>
+        </form>
+        <div data-household-actions hidden>
+          <label class="field-label" for="invite-email">Ezgi'yi e-posta ile davet et</label>
+          <div class="inline-ingredient"><input class="field-input" id="invite-email" type="email" autocomplete="email" required placeholder="ezgi@eposta.com" /><button class="button button-outline" type="button" data-action="invite-member">Davet et</button></div>
+          <p class="panel-hint">Davet, kurulu Supabase Edge Function üzerinden e-postayla gönderilir.</p>
+          <button class="button button-outline" type="button" data-action="migrate-local">Bu cihazdaki tarifleri ortak arşive aktar</button>
+          <button class="button button-quiet" type="button" data-action="export-local">Bu cihazdaki veriyi yedekle (JSON)</button>
+          <button class="text-button" type="button" data-action="sign-out">Ortak hesaptan çıkış yap</button>
+        </div>
+        <section class="migration-preview" data-migration-preview hidden aria-labelledby="migration-preview-title">
+          <h3 id="migration-preview-title">Aktarımı gözden geçir</h3>
+          <p data-migration-destination></p>
+          <p data-migration-summary></p>
+          <ul data-migration-meals></ul>
+          <p class="panel-hint" data-migration-preservation>Aktarım yerel yemekleri veya fotoğrafları silmez.</p>
+          <div class="inline-ingredient"><button class="button button-quiet" type="button" data-action="cancel-migration">Vazgeç</button><button class="button button-dark" type="button" data-action="confirm-migration" data-confirm-migration>Listelenen yemekleri aktar</button></div>
+        </section>
+      </section>
+      <div class="dialog-actions"><button class="button button-quiet" type="button" data-action="close-sharing">Kapat</button></div>
+    </dialog>
     <div class="toast" data-toast role="status" aria-live="polite"></div>
   </body>
 </html>

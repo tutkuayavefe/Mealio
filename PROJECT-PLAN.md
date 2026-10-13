@@ -2,7 +2,7 @@
 
 ## Product goal
 
-Help one household build a reusable meal library and quickly answer “what can I cook with these ingredients?” Search results are always saved meals from that library. The application never generates meal suggestions.
+Help one household build a reusable meal library and quickly answer “what can I cook with these ingredients?” Search results are always saved meals from that library. The application never generates meal suggestions. The intended next architecture is shared household storage so authorized household members can use the same library across devices.
 
 ## MVP acceptance criteria
 
@@ -11,11 +11,13 @@ Help one household build a reusable meal library and quickly answer “what can 
 - Search by text and select multiple ingredients. Show only saved meals, ranked by how many selected ingredients match; with no selected ingredient, text search can match meal or ingredient names.
 - Provide useful empty, validation, and error states.
 - Work at mobile and desktop widths, and allow normal keyboard navigation.
-- Keep all data and photos in the user's browser; no account or remote service is required.
+- Current shipped behavior keeps data and photos in the user's browser; no account or remote service is connected.
 
 ## Data model
 
 The browser database is `mealio`, current schema version 4. Version upgrades create the canonical stores/indexes and add one migration marker. When the starter-data migration finds no meals, it reuses matching ingredients and seeds only the four dishes from the user's brief. The marker prevents those examples from reappearing after a user clears their library.
+
+The shared schema is in `supabase/migrations/20261013090000_household_data.sql`. It uses household-scoped rows, membership RLS, relational meal-to-ingredient links, atomic RPC writes, and a private photo bucket. The browser integration supports Supabase Auth, shared CRUD, email invitations through an Edge Function, explicit local-to-cloud merge with a review screen, and JSON backup. It remains config-first: until a project is provisioned, the migration and function are deployed, and public client settings are supplied, the app continues to use local IndexedDB. Do not treat the schema as a live database or migrate user data until setup is complete and verified.
 
 ### `ingredients` object store
 
@@ -42,7 +44,8 @@ The `meta` store keeps one-time migration markers keyed by `id`. This keeps ingr
 - `styles.css` owns responsive layout and visual system.
 - `src/app.js` handles rendering, form interactions, search, and dialog behavior.
 - `src/store.js` owns IndexedDB schema, validation, reusable ingredient creation, meal CRUD, and seeded starter entries.
-- Browser-local IndexedDB is appropriate for a single-user MVP and supports photos without localStorage's small synchronous quota. It also avoids collecting personal cooking data on a server.
+- Browser-local IndexedDB is the current working storage and supports photos without localStorage's small synchronous quota.
+- Shared mode: Supabase Auth, Postgres with household membership row-level security, and private Supabase Storage. The browser must only use the publishable/anon key; the invitation Edge Function keeps the service-role key server-side. `.github/workflows/pages.yml` packages the app root subset and deploys on `main` pushes or manual workflow dispatch after the repository's Pages source is set to GitHub Actions.
 - Starter entries use only meals named in the product brief and are explicitly stored as library records. All search results come from stored meal records.
 
 ## Implementation plan
@@ -55,4 +58,4 @@ The `meta` store keeps one-time migration markers keyed by `id`. This keeps ingr
 
 ## Future extensions (outside the MVP)
 
-Ingredient amounts and units, backups/export, multi-device sync, household sharing, and optional meal planning can be added without changing the core rule that recommendations come only from the saved library.
+Ingredient amounts and units and optional meal planning can be added without changing the core rule that recommendations come only from the saved library. Local-to-cloud transfer is explicit and retryable; it preserves local IDs and records, reuses duplicate normalized ingredients, and reports partial transfers/photo failures.

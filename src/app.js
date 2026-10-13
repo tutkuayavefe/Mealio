@@ -1,4 +1,6 @@
-import { initStore, listData, addIngredient, saveMeal, deleteMeal, getMeal } from './store.js';
+import * as localStore from './store.js';
+import * as cloudStore from './cloud-store.js';
+import { isCloudConfigured, getSession, requestSignInLink, signOut, createHousehold, inviteHouseholdMember, getHouseholdDetails, authStateChange } from './cloud-client.js';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const els = {
@@ -8,6 +10,11 @@ const els = {
   detailDialog: $('[data-detail-dialog]'), detailContent: $('[data-detail-content]'), formIngredients: $('[data-form-ingredients]'),
   formError: $('[data-form-error]'), photo: $('#meal-photo'), photoLabel: $('[data-photo-label]'), photoPreview: $('[data-photo-preview]'),
   photoRemove: $('[data-action="remove-photo"]'),
+  sharingDialog: $('[data-sharing-dialog]'), cloudStatus: $('[data-cloud-status]'), cloudError: $('[data-cloud-error]'),
+  cloudSignin: $('[data-cloud-signin]'), createHousehold: $('[data-create-household]'), householdActions: $('[data-household-actions]'),
+  migrationPreview: $('[data-migration-preview]'), migrationDestination: $('[data-migration-destination]'),
+  migrationSummary: $('[data-migration-summary]'), migrationMeals: $('[data-migration-meals]'),
+  migrationConfirm: $('[data-confirm-migration]'),
   loading: $('[data-loading]'), toast: $('[data-toast]'),
 };
 let data = { ingredients: [], meals: [] };
@@ -15,9 +22,14 @@ let selected = new Set();
 let toastTimer;
 let previewUrl = null;
 let removeExistingPhoto = false;
+let store = localStore;
+let cloudUser = null;
+let cloudRefreshTimer = null;
+let cloudUnavailable = false;
+let pendingMigration = null;
 const imageUrls = new WeakMap();
 
-function normalized(value) { return String(value ?? '').trim().toLocaleLowerCase('tr'); }
+function normalized(value) { return String(value ?? '').trim().replace(/\s+/g, ' ').normalize('NFKC').toLocaleLowerCase('tr'); }
 function escapeHTML(value) {
   return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 }
@@ -99,9 +111,11 @@ function openMealForm(meal = null) {
   removeExistingPhoto = false;
   const existingPhoto = meal?.photo instanceof Blob ? meal.photo : null;
   previewUrl = existingPhoto ? URL.createObjectURL(existingPhoto) : null;
-  els.photoPreview.innerHTML = previewUrl ? `<img src="${escapeHTML(previewUrl)}" alt="Mevcut yemek fotoğrafı">` : '';
-  els.photoLabel.textContent = existingPhoto ? 'Yeni fotoğraf seç' : 'Bir fotoğraf seç';
-  els.photoRemove.hidden = !existingPhoto;
+  const existingPhotoSource = previewUrl ?? meal?.photoUrl ?? '';
+  const hasExistingPhoto = Boolean(existingPhotoSource);
+  els.photoPreview.innerHTML = existingPhotoSource ? `<img src="${escapeHTML(existingPhotoSource)}" alt="Mevcut yemek fotoğrafı">` : '';
+  els.photoLabel.textContent = hasExistingPhoto ? 'Yeni fotoğraf seç' : 'Bir fotoğraf seç';
+  els.photoRemove.hidden = !hasExistingPhoto;
   renderFormIngredients();
   const ingredientIds = new Set(mealIngredientIds(meal ?? {}));
   els.form.querySelectorAll('[name="ingredientIds"]').forEach(input => { input.checked = ingredientIds.has(input.value); });
@@ -112,13 +126,119 @@ function toast(message) {
   els.toast.textContent = message; els.toast.classList.add('visible');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => els.toast.classList.remove('visible'), 2400);
 }
-async function refresh() { setData(await listData()); }
+async function refresh() { setData(await store.listData()); }
+function showCloudError(error) {
+  els.cloudError.textContent = error?.message || 'İşlem tamamlanamadı. Tekrar dene.';
+  els.cloudError.hidden = false;
+}
+function clearCloudError() { els.cloudError.textContent = ''; els.cloudError.hidden = true; }
+function updateSharingUI() {
+  const configured = isCloudConfigured();
+  els.cloudSignin.hidden = !configured || Boolean(cloudUser);
+  els.createHousehold.hidden = !configured || !cloudUser || store === cloudStore;
+  els.householdActions.hidden = !configured || !cloudUser || store !== cloudStore;
+  if (!configured) els.cloudStatus.textContent = 'Ortak arşiv henüz kurulmadı. Bu cihazdaki tarifler yerel olarak çalışmaya devam ediyor.';
+  else if (cloudUnavailable) els.cloudStatus.textContent = 'Ortak arşive erişilemedi; şu an yalnızca bu cihazdaki yerel arşiv gösteriliyor.';
+  else if (!cloudUser) els.cloudStatus.textContent = 'Yerel tariflerin bu tarayıcıda kayıtlı. Yalnızca önceden davet edilmiş kişiler giriş yapabilir.';
+  else if (store === cloudStore) els.cloudStatus.textContent = `Ortak arşiv etkin: ${cloudUser.email}. Hane üyeleri aynı yemek listesini görür.`;
+  else els.cloudStatus.textContent = `Giriş yapıldı (${cloudUser.email}); önce ortak haneyi oluştur.`;
+}
+async function activateCloud(session) {
+  clearInterval(cloudRefreshTimer); cloudRefreshTimer = null;
+  cloudUnavailable = false;
+  cloudUser = session?.user ?? null;
+  if (!cloudUser) { store = localStore; await refresh(); }
+  else {
+    try {
+      await cloudStore.initStore(); store = cloudStore; selected.clear(); await refresh();
+      cloudRefreshTimer = setInterval(() => {
+        if (document.visibilityState === 'visible' && store === cloudStore) refresh().catch(showCloudError);
+      }, 30000);
+    }
+    catch (error) {
+      store = localStore;
+      if (error?.message !== 'NO_HOUSEHOLD') { cloudUnavailable = true; showCloudError(error); }
+    }
+  }
+  updateSharingUI();
+}
+function fileAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(blob);
+  });
+}
+async function exportLocalData() {
+  const snapshot = await localStore.listData();
+  const meals = await Promise.all(snapshot.meals.map(async meal => ({
+    ...meal, photo: meal.photo instanceof Blob ? { type: meal.photo.type, dataUrl: await fileAsDataUrl(meal.photo) } : null,
+  })));
+  const contents = JSON.stringify({ format: 'mealio-local-backup-v1', exportedAt: new Date().toISOString(), ingredients: snapshot.ingredients, meals }, null, 2);
+  const url = URL.createObjectURL(new Blob([contents], { type: 'application/json' }));
+  const link = document.createElement('a'); link.href = url;
+  link.download = `mealio-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(url);
+}
+async function previewLocalMigration() {
+  const local = await localStore.listData();
+  const remote = await cloudStore.listData();
+  const household = await getHouseholdDetails();
+  const existingMealIds = new Set(remote.meals.flatMap(meal => [meal.id, meal.sourceLocalId].filter(Boolean)));
+  const newMeals = local.meals.filter(meal => !existingMealIds.has(meal.id));
+  const existingIngredients = new Set(remote.ingredients.map(item => normalized(item.name)));
+  const newIngredients = local.ingredients.filter(item => !existingIngredients.has(normalized(item.name)));
+  pendingMigration = { local, newMeals, newIngredients, household };
+  els.migrationDestination.textContent = `Hedef ortak hane: ${household?.name ?? 'Mealio'} (${household?.id ?? 'bilinmiyor'})`;
+  const photoCount = newMeals.filter(meal => meal.photo instanceof Blob).length;
+  els.migrationSummary.textContent = `${newMeals.length} yemek, ${photoCount} fotoğraf ve ${newIngredients.length} yeni malzeme aktarılacak. ${local.meals.length - newMeals.length} daha önce aktarılmış kayıt atlanacak.`;
+  els.migrationMeals.innerHTML = newMeals.length
+    ? newMeals.map(meal => `<li>${escapeHTML(meal.name)}${meal.photo instanceof Blob ? ' <span>(fotoğraf dahil)</span>' : ''}</li>`).join('')
+    : '<li>Aktarılacak yeni yemek yok.</li>';
+  els.migrationPreview.hidden = false;
+  els.migrationConfirm.disabled = newMeals.length === 0 && newIngredients.length === 0;
+}
+async function migrateLocalData() {
+  if (!pendingMigration) return;
+  const { local, newMeals, household } = pendingMigration;
+  const currentHousehold = await getHouseholdDetails();
+  if (!household?.id || currentHousehold?.id !== household.id) {
+    pendingMigration = null;
+    els.migrationPreview.hidden = true;
+    throw new Error('Aktif hane aktarım önizlemesindeki hedefle aynı değil. Hiçbir kayıt gönderilmedi; hedefi tekrar kontrol etmek için önizlemeyi yenile.');
+  }
+  const targetHouseholdId = household.id;
+  const ingredientMap = new Map();
+  let added = 0;
+  let currentMeal = 'Malzemeler';
+  try {
+    for (const ingredient of local.ingredients) ingredientMap.set(ingredient.id, (await cloudStore.addIngredient(ingredient.name, targetHouseholdId)).id);
+    for (const meal of newMeals) {
+      currentMeal = meal.name;
+      const ingredientIds = mealIngredientIds(meal).map(id => ingredientMap.get(id)).filter(Boolean);
+      if (!ingredientIds.length) throw new Error('Bu yemeğin aktarılabilir malzemesi yok.');
+      await cloudStore.saveMeal({ id: meal.id, sourceLocalId: meal.id, name: meal.name, instructions: meal.instructions, ingredientIds, photo: meal.photo ?? null, targetHouseholdId });
+      added += 1;
+    }
+  } catch (error) {
+    pendingMigration = null;
+    els.migrationPreview.hidden = true;
+    try { await refresh(); } catch { /* Keep the local copy and report the partial transfer. */ }
+    showCloudError(new Error(`${added} yemek aktarıldı; “${currentMeal}” aktarılırken işlem durdu. Bu cihazdaki tüm veriler korundu. Paylaşım ayarlarından kalanları yeniden önizleyip tekrar deneyebilirsin. ${error?.message ?? ''}`));
+    return;
+  }
+  pendingMigration = null;
+  els.migrationPreview.hidden = true;
+  try {
+    await refresh();
+    toast(`${added} yemek ortak arşive aktarıldı. Yerel kopya korundu.`);
+  } catch (error) {
+    showCloudError(new Error(`${added} yemek buluta kaydedildi, ancak liste yenilenemedi. Yerel kopya korundu; sayfayı yenileyip doğrula. ${error?.message ?? ''}`));
+  }
+}
 async function createIngredient(rawName) {
   const name = rawName.trim();
   if (!name) return null;
   const existing = data.ingredients.find(item => normalized(item.name) === normalized(name));
   if (existing) return existing;
-  const created = await addIngredient(name);
+  const created = await store.addIngredient(name);
   await refresh();
   return created ?? data.ingredients.find(item => normalized(item.name) === normalized(name));
 }
@@ -144,6 +264,36 @@ document.addEventListener('click', async event => {
   if (action) {
     switch (action.dataset.action) {
       case 'new-meal': openMealForm(); break;
+      case 'open-sharing': clearCloudError(); updateSharingUI(); els.sharingDialog.showModal(); break;
+      case 'close-sharing': pendingMigration = null; els.migrationPreview.hidden = true; els.sharingDialog.close(); break;
+      case 'invite-member': {
+        const input = $('#invite-email');
+        if (!input.reportValidity()) break;
+        try { await inviteHouseholdMember(input.value); toast('E-posta daveti gönderildi.'); input.value = ''; }
+        catch (error) { showCloudError(error); }
+        break;
+      }
+      case 'sign-out':
+        try { await signOut(); cloudUser = null; store = localStore; await refresh(); updateSharingUI(); toast('Ortak hesaptan çıkış yapıldı.'); }
+        catch (error) { showCloudError(error); }
+        break;
+      case 'migrate-local':
+        try { await previewLocalMigration(); }
+        catch (error) { showCloudError(error); }
+        break;
+      case 'cancel-migration':
+        pendingMigration = null; els.migrationPreview.hidden = true; break;
+      case 'confirm-migration': {
+        const button = els.migrationConfirm; button.disabled = true; button.textContent = 'Aktarılıyor…';
+        try { await migrateLocalData(); }
+        catch (error) { showCloudError(error); }
+        finally { button.disabled = false; button.textContent = 'Listelenen yemekleri aktar'; }
+        break;
+      }
+      case 'export-local':
+        try { await exportLocalData(); toast('Yerel yedek indirildi.'); }
+        catch (error) { showCloudError(error); }
+        break;
       case 'new-ingredient': openMealForm(); $('#new-ingredient-name').focus(); break;
       case 'clear-filters': selected.clear(); els.search.value = ''; renderIngredients(); renderMeals(); break;
       case 'close-dialog': els.mealDialog.close(); break;
@@ -159,13 +309,13 @@ document.addEventListener('click', async event => {
         break;
       }
       case 'edit-meal': {
-        const meal = await getMeal(action.dataset.id) ?? data.meals.find(item => item.id === action.dataset.id);
+        const meal = await store.getMeal(action.dataset.id) ?? data.meals.find(item => item.id === action.dataset.id);
         els.detailDialog.close(); openMealForm(meal); break;
       }
       case 'delete-meal': {
         const meal = data.meals.find(item => item.id === action.dataset.id);
         if (meal && window.confirm(`“${meal.name}” yemeğini silmek istiyor musun?`)) {
-          await deleteMeal(meal.id); els.detailDialog.close(); await refresh(); toast('Yemek silindi.');
+          await store.deleteMeal(meal.id); els.detailDialog.close(); await refresh(); toast('Yemek silindi.');
         }
         break;
       }
@@ -207,7 +357,7 @@ els.form.addEventListener('submit', async event => {
   try {
     const id = els.form.elements.id.value || undefined;
     const chosenPhoto = els.photo.files?.[0];
-    await saveMeal({ id, name: els.form.elements.name.value.trim(), instructions: els.form.elements.instructions.value.trim(), ingredientIds, photo: chosenPhoto ?? (removeExistingPhoto ? null : (id ? undefined : null)) });
+    await store.saveMeal({ id, name: els.form.elements.name.value.trim(), instructions: els.form.elements.instructions.value.trim(), ingredientIds, photo: chosenPhoto ?? (removeExistingPhoto ? null : (id ? undefined : null)) });
     els.mealDialog.close(); await refresh(); toast('Yemek tarif defterine eklendi.');
   } catch (error) {
     els.formError.textContent = error?.message || 'Yemek kaydedilemedi. Lütfen tekrar dene.'; els.formError.hidden = false;
@@ -219,7 +369,29 @@ els.mealDialog.addEventListener('click', event => { if (event.target === els.mea
 els.detailDialog.addEventListener('click', event => { if (event.target === els.detailDialog) els.detailDialog.close(); });
 
 els.loading.hidden = false;
-try { await initStore(); await refresh(); }
+try {
+  await localStore.initStore(); await refresh(); updateSharingUI();
+  if (isCloudConfigured()) {
+    try {
+      await activateCloud(await getSession());
+      await authStateChange((session) => { setTimeout(() => activateCloud(session).catch(showCloudError), 0); });
+    } catch (error) { showCloudError(error); }
+  }
+  els.cloudSignin.addEventListener('submit', async event => {
+    event.preventDefault(); clearCloudError();
+    const button = $('[data-signin-button]'); button.disabled = true;
+    try {
+      await requestSignInLink(els.cloudSignin.elements.email.value);
+      els.cloudStatus.textContent = 'E-postana gelen giriş bağlantısına tıkla. Erişim için önceden davet edilmiş olman gerekir.';
+    } catch (error) { showCloudError(error); }
+    finally { button.disabled = false; }
+  });
+  els.createHousehold.addEventListener('submit', async event => {
+    event.preventDefault(); clearCloudError();
+    try { await createHousehold(els.createHousehold.elements.name.value); await activateCloud(await getSession()); }
+    catch (error) { showCloudError(error); }
+  });
+}
 catch (error) {
   console.error('Mealio verisi başlatılamadı:', error);
   const message = error?.message || 'Yerel veriye erişirken bir sorun oluştu.';
